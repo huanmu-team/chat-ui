@@ -10,6 +10,7 @@ export interface ChatConfig {
   apiKey: string;
   threadId: string;
   agentId: string;
+  baseUrl?: string; // Base URL for the API
   maxMessages?: number; // Maximum number of messages to keep in memory
 }
 

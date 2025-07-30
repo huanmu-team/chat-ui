@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { LangGraphAPI } from '../lib/api';
@@ -12,7 +12,11 @@ interface ChatPanelProps {
   onConfigChange: (config: ChatConfig) => void;
 }
 
-export function ChatPanel({ config, onConfigChange }: ChatPanelProps) {
+export interface ChatPanelRef {
+  sendMessage: (content: string) => Promise<void>;
+}
+
+export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onConfigChange }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,11 @@ export function ChatPanel({ config, onConfigChange }: ChatPanelProps) {
     setError(null);
   };
 
+  // Expose sendMessage function via ref
+  useImperativeHandle(ref, () => ({
+    sendMessage: handleSendMessage
+  }));
+
   const handleSendMessage = async (content: string) => {
     if (!config.apiKey || !config.threadId || !config.agentId) {
       setError('请配置 API key 和 thread ID 和 agent ID');
@@ -60,7 +69,7 @@ export function ChatPanel({ config, onConfigChange }: ChatPanelProps) {
     setError(null);
 
     try {
-      const api = new LangGraphAPI(config.apiKey, config.threadId, config.agentId);
+      const api = new LangGraphAPI(config.apiKey, config.threadId, config.agentId, config.baseUrl);
       const response = await api.sendMessage(content);
       setMessages(prev => enforceMessageLimit([...prev, response]));
     } catch (err) {
@@ -148,7 +157,7 @@ export function ChatPanel({ config, onConfigChange }: ChatPanelProps) {
       />
     </div>
   );
-}
+});
 
 interface ConfigFormProps {
   config: ChatConfig;
@@ -203,6 +212,18 @@ function ConfigForm({ config, onSave }: ConfigFormProps) {
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          API Base URL (可选)
+        </label>
+        <input
+          type="url"
+          value={formData.baseUrl || ''}
+          onChange={(e) => setFormData(prev => ({ ...prev, baseUrl: e.target.value }))}
+          className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          placeholder="https://api.langchain.com"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           最大消息数量 (默认100)
         </label>
         <input
@@ -224,3 +245,5 @@ function ConfigForm({ config, onSave }: ConfigFormProps) {
     </form>
   );
 }
+
+ChatPanel.displayName = 'ChatPanel';
