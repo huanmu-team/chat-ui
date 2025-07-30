@@ -15,7 +15,7 @@ export class LangGraphAPI {
 
   async sendMessage(content: string): Promise<Message> {
     try {
-      const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/runs`, {
+      const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/runs/wait`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -23,10 +23,11 @@ export class LangGraphAPI {
         },
         body: JSON.stringify({
           assistant_id: this.agentId,
-          thread: {
+          input: {
             messages: [
               {
                 role: 'user',
+                type: 'human',
                 content: content,
               },
             ],
@@ -40,42 +41,21 @@ export class LangGraphAPI {
 
       const data = await response.json();
       
+      // Extract the last_message from the response
+      const lastMessage = data.last_message;
+      if (!lastMessage) {
+        throw new Error('No response message received from agent');
+      }
+      
       // Transform the response to match our Message interface
       return {
-        id: data.id || Date.now().toString(),
-        content: data.content || data.message || 'No response',
+        id: lastMessage.id || Date.now().toString(),
+        content: lastMessage.content || 'No response',
         role: 'assistant',
-        timestamp: new Date(),
+        timestamp: new Date(lastMessage.created_at || Date.now()),
       };
     } catch (error) {
       throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  async getMessages(): Promise<Message[]> {
-    try {
-      const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Transform the response to match our Message interface
-      return data.messages?.map((msg: any) => ({
-        id: msg.id || Date.now().toString(),
-        content: msg.content || '',
-        role: msg.role || 'assistant',
-        timestamp: new Date(msg.created_at || Date.now()),
-      })) || [];
-    } catch (error) {
-      throw new Error(`Failed to fetch messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
