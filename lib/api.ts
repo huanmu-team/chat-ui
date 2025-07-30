@@ -15,28 +15,30 @@ export class LangGraphAPI {
 
   async sendMessage(content: string): Promise<Message> {
     try {
+      const requestBody = {
+        assistant_id: this.agentId,
+        input: {
+          messages: [
+            {
+              role: 'user',
+              content: content,
+            },
+          ],
+        },
+      };
+
       const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/runs/wait`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          assistant_id: this.agentId,
-          input: {
-            messages: [
-              {
-                role: 'user',
-                type: 'human',
-                content: content,
-              },
-            ],
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -49,10 +51,10 @@ export class LangGraphAPI {
       
       // Transform the response to match our Message interface
       return {
-        id: lastMessage.id || Date.now().toString(),
-        content: lastMessage.content || 'No response',
+        id: Date.now().toString(),
+        content: typeof lastMessage === 'string' ? lastMessage : lastMessage.content || 'No response',
         role: 'assistant',
-        timestamp: new Date(lastMessage.created_at || Date.now()),
+        timestamp: new Date(),
       };
     } catch (error) {
       throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
