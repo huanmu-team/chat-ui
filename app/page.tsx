@@ -1,39 +1,57 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChatPanel, ChatPanelRef } from '../components/ChatPanel';
 import { SimultaneousInput } from '../components/SimultaneousInput';
 import { ChatConfig } from '../types';
+import { getInitialAgentConfig } from '../lib/config';
+import { ChatAPI } from '../lib/api';
 
 export default function Home() {
   const agent1Ref = useRef<ChatPanelRef>(null);
   const agent2Ref = useRef<ChatPanelRef>(null);
 
-  const [agent1Config, setAgent1Config] = useState<ChatConfig>({
-    agentName: '小文',
-    apiKey: '',
-    threadId: '',
-    agentId: '',
-    maxMessages: 100,
-  });
+  const [agent1Config, setAgent1Config] = useState<ChatConfig>(() => getInitialAgentConfig('agent1'));
+  const [agent2Config, setAgent2Config] = useState<ChatConfig>(() => getInitialAgentConfig('agent2'));
 
-  const [agent2Config, setAgent2Config] = useState<ChatConfig>({
-    agentName: '小七',
-    apiKey: '',
-    threadId: '',
-    agentId: '',
-    maxMessages: 100,
-  });
+  // Auto-create threads on page load if server has configuration
+  useEffect(() => {
+    const createInitialThreads = async () => {
+      // Try to create thread for agent 1
+      if (!agent1Config.threadId) {
+        try {
+          const api1 = new ChatAPI('agent1');
+          const threadId1 = await api1.createNewThread();
+          setAgent1Config(prev => ({ ...prev, threadId: threadId1 }));
+        } catch (error) {
+          console.warn('Agent 1 not configured on server or failed to create thread:', error);
+        }
+      }
+
+      // Try to create thread for agent 2
+      if (!agent2Config.threadId) {
+        try {
+          const api2 = new ChatAPI('agent2');
+          const threadId2 = await api2.createNewThread();
+          setAgent2Config(prev => ({ ...prev, threadId: threadId2 }));
+        } catch (error) {
+          console.warn('Agent 2 not configured on server or failed to create thread:', error);
+        }
+      }
+    };
+
+    createInitialThreads();
+  }, []); // Run once on mount
 
   const handleSimultaneousMessage = async (content: string) => {
     // Send message to both agents simultaneously
     const promises = [];
     
-    if (agent1Ref.current && agent1Config.apiKey && agent1Config.threadId && agent1Config.agentId) {
+    if (agent1Ref.current && agent1Config.threadId) {
       promises.push(agent1Ref.current.sendMessage(content));
     }
     
-    if (agent2Ref.current && agent2Config.apiKey && agent2Config.threadId && agent2Config.agentId) {
+    if (agent2Ref.current && agent2Config.threadId) {
       promises.push(agent2Ref.current.sendMessage(content));
     }
 
@@ -44,9 +62,17 @@ export default function Home() {
     }
   };
 
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Fix hydration mismatch
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   const canSendSimultaneous = () => {
-    const agent1Ready = agent1Config.apiKey && agent1Config.threadId && agent1Config.agentId;
-    const agent2Ready = agent2Config.apiKey && agent2Config.threadId && agent2Config.agentId;
+    if (!isHydrated) return false;
+    const agent1Ready = agent1Config.threadId;
+    const agent2Ready = agent2Config.threadId;
     return agent1Ready || agent2Ready;
   };
 
@@ -79,6 +105,7 @@ export default function Home() {
               ref={agent1Ref}
               config={agent1Config}
               onConfigChange={setAgent1Config}
+              agentKey="agent1"
             />
           </div>
 
@@ -88,6 +115,7 @@ export default function Home() {
               ref={agent2Ref}
               config={agent2Config}
               onConfigChange={setAgent2Config}
+              agentKey="agent2"
             />
           </div>
         </div>

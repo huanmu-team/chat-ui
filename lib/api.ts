@@ -1,60 +1,54 @@
 import { Message } from '../types';
 
-export class LangGraphAPI {
-  private apiKey: string;
-  private threadId: string;
-  private baseUrl: string;
-  private agentId: string;
+export class ChatAPI {
+  private agentKey: string;
 
-  constructor(apiKey: string, threadId: string, agentId: string, baseUrl = 'https://api.langchain.com') {
-    this.apiKey = apiKey;
-    this.threadId = threadId;
-    this.baseUrl = baseUrl;
-    this.agentId = agentId;
+  constructor(agentKey: 'agent1' | 'agent2') {
+    this.agentKey = agentKey;
   }
 
-  async sendMessage(content: string): Promise<Message> {
+  async createNewThread(): Promise<string> {
     try {
-      const requestBody = {
-        assistant_id: this.agentId,
-        input: {
-          messages: [
-            {
-              role: 'user',
-              content: content,
-            },
-          ],
-        },
-      };
-
-      const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/runs/wait`, {
+      const response = await fetch(`/api/agents/${this.agentKey}/threads`, {
         method: 'POST',
         headers: {
-          'X-API-Key': this.apiKey,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to create thread: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.threadId;
+    } catch (error) {
+      throw new Error(`Failed to create new thread: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async sendMessage(threadId: string, content: string): Promise<Message> {
+    try {
+      const response = await fetch(`/api/agents/${this.agentKey}/threads/${threadId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to send message: ${response.status}`);
       }
 
       const data = await response.json();
       
-      // Extract the last_message from the response
-      const lastMessage = data.last_message;
-      if (!lastMessage) {
-        throw new Error('No response message received from agent');
-      }
-      
-      // Transform the response to match our Message interface
+      // Convert timestamp string back to Date object
       return {
-        id: Date.now().toString(),
-        content: typeof lastMessage === 'string' ? lastMessage : lastMessage.content || 'No response',
-        role: 'assistant',
-        timestamp: new Date(),
+        ...data,
+        timestamp: new Date(data.timestamp),
       };
     } catch (error) {
       throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);

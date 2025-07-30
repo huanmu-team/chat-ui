@@ -3,25 +3,32 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-import { LangGraphAPI } from '../lib/api';
+import { ChatAPI } from '../lib/api';
 import { Message, ChatConfig } from '../types';
-import { Settings, MessageSquare, Trash2 } from 'lucide-react';
+import { Settings, MessageSquare, Trash2, Plus } from 'lucide-react';
 
 interface ChatPanelProps {
   config: ChatConfig;
   onConfigChange: (config: ChatConfig) => void;
+  agentKey: 'agent1' | 'agent2'; // Add agent key for localStorage
 }
 
 export interface ChatPanelRef {
   sendMessage: (content: string) => Promise<void>;
 }
 
-export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onConfigChange }, ref) => {
+export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onConfigChange, agentKey }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fix hydration mismatch by tracking when component has hydrated
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,14 +53,38 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onC
     setError(null);
   };
 
+  // Function to create a new thread
+  const createNewThread = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const api = new ChatAPI(agentKey);
+      const newThreadId = await api.createNewThread();
+      
+      // Update config with new thread ID
+      onConfigChange({
+        ...config,
+        threadId: newThreadId
+      });
+      
+      // Clear messages for new thread
+      setMessages([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建新会话失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Expose sendMessage function via ref
   useImperativeHandle(ref, () => ({
     sendMessage: handleSendMessage
   }));
 
   const handleSendMessage = async (content: string) => {
-    if (!config.apiKey || !config.threadId || !config.agentId) {
-      setError('请配置 API key 和 thread ID 和 agent ID');
+    if (!config.threadId) {
+      setError('请先创建新会话');
       return;
     }
 
@@ -69,8 +100,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onC
     setError(null);
 
     try {
-      const api = new LangGraphAPI(config.apiKey, config.threadId, config.agentId, config.baseUrl);
-      const response = await api.sendMessage(content);
+      const api = new ChatAPI(agentKey);
+      const response = await api.sendMessage(config.threadId, content);
       setMessages(prev => enforceMessageLimit([...prev, response]));
     } catch (err) {
       setError(err instanceof Error ? err.message : '发送消息失败');
@@ -101,8 +132,16 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onC
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={createNewThread}
+            disabled={!isHydrated || isLoading}
+            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="新建会话"
+          >
+            <Plus size={16} className="text-gray-600 dark:text-gray-400" />
+          </button>
+          <button
             onClick={clearChatHistory}
-            disabled={messages.length === 0}
+            disabled={!isHydrated || messages.length === 0}
             className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="清除聊天记录"
           >
@@ -152,8 +191,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ config, onC
       {/* Input */}
       <ChatInput
         onSendMessage={handleSendMessage}
-        disabled={isLoading || !config.apiKey || !config.threadId || !config.agentId}
-        placeholder={!config.apiKey || !config.threadId || !config.agentId ? '请先配置 API 和 Thread ID...' : '输入消息'}
+        disabled={!isHydrated || isLoading || !config.threadId}
+        placeholder={!isHydrated || !config.threadId ? '请先创建新会话...' : '输入消息'}
       />
     </div>
   );
@@ -176,50 +215,14 @@ function ConfigForm({ config, onSave }: ConfigFormProps) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          智能体ID
-        </label>
-        <input
-          type="text"
-          value={formData.agentId}
-          onChange={(e) => setFormData(prev => ({ ...prev, agentId: e.target.value }))}
-          className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-          placeholder="智能体ID"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          API Key
-        </label>
-        <input
-          type="password"
-          value={formData.apiKey}
-          onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
-          className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-          placeholder="LangGraph API Key"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Thread ID
+          Thread ID (可选)
         </label>
         <input
           type="text"
           value={formData.threadId}
           onChange={(e) => setFormData(prev => ({ ...prev, threadId: e.target.value }))}
           className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-          placeholder="LangGraph Thread ID"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          API Base URL (可选)
-        </label>
-        <input
-          type="url"
-          value={formData.baseUrl || ''}
-          onChange={(e) => setFormData(prev => ({ ...prev, baseUrl: e.target.value }))}
-          className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-          placeholder="https://api.langchain.com"
+          placeholder="留空将自动创建新会话"
         />
       </div>
       <div>
@@ -235,6 +238,9 @@ function ConfigForm({ config, onSave }: ConfigFormProps) {
           className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
           placeholder="100"
         />
+      </div>
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        <strong>说明:</strong> API密钥和智能体配置已在服务器端预配置，无需手动输入。
       </div>
       <button
         type="submit"
