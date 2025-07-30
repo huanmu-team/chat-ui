@@ -30,7 +30,7 @@ export class LangGraphAPI {
       const response = await fetch(`${this.baseUrl}/threads/${this.threadId}/runs/wait`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'X-API-Key': this.apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
