@@ -1,14 +1,13 @@
 # Chat UI - Agent Comparison Dashboard
 
-A lightweight Next.js dashboard for comparing two LangGraph agents side by side.
+A lightweight Next.js application for comparing two LangGraph agents side by side. This lightweight dashboard allows users to chat with two different agents simultaneously to compare their performance and responses.
 
 ## Features
 
 - **Dual Chat Interface**: Compare two agents simultaneously
-- **Configurable API Settings**: Easy setup for API keys and thread IDs  
+- **Server-Side Architecture**: API keys and sensitive data stay on server
+- **Automatic Thread Management**: No manual configuration needed
 - **Real-time Messaging**: Live chat with both agents
-- **Production Ready**: Optimized for Vercel deployment
-- **TypeScript**: Full type safety
 - **Responsive Design**: Works on desktop and mobile
 
 ## Quick Start
@@ -23,20 +22,29 @@ A lightweight Next.js dashboard for comparing two LangGraph agents side by side.
    bun dev
    ```
 
-3. **Configure agents**:
-   - Click the settings icon on each chat panel
-   - Enter your LangGraph API key and thread ID
-   - Set agent names for easy identification
+3. **Start chatting**:
+   - Click "New Thread" button to start a conversation
+   - Send messages to compare both agents
+   - Thread IDs are managed automatically
 
 ## Environment Variables
 
-Copy `.env.example` to `.env.local` and configure:
+Copy `.env.local.example` to `.env.local` with your server-side configure:
 
 ```bash
-# Optional: Set default values
-NEXT_PUBLIC_LANGGRAPH_API_URL=https://api.langchain.com
-NEXT_PUBLIC_DEFAULT_AGENT_1_NAME=Agent 1
-NEXT_PUBLIC_DEFAULT_AGENT_2_NAME=Agent 2
+# Set server-side only (required)
+AGENT_1_API_KEY=your_agent_1_api_key_here
+AGENT_1_BASE_URL=https://your-agent-1-deployment.us.langgraph.app
+AGENT_1_ID=your_agent_1_id_here
+
+AGENT_2_API_KEY=your_agent_2_api_key_here
+AGENT_2_BASE_URL=https://your-agent-2-deployment.us.langgraph.app
+AGENT_2_ID=your_agent_2_id_here
+
+# Optional client defaults
+NEXT_PUBLIC_AGENT_1_NAME=Agent1
+NEXT_PUBLIC_AGENT_2_NAME=Agent2
+NEXT_PUBLIC_MAX_MESSAGES=100
 ```
 
 ## Development Commands
@@ -53,34 +61,46 @@ NEXT_PUBLIC_DEFAULT_AGENT_2_NAME=Agent 2
 
 1. Push to GitHub repository
 2. Import project in Vercel dashboard
-3. Deploy automatically
+3. Add environment variables in Vercel settings
+4. Deploy automatically
 
-### Manual Deployment
 
-```bash
-bun build
-```
+## Security Architecture
 
-The built files will be in the `.next` directory.
+The application uses a server-side architecture:
 
-## API Integration
+### Server-Side API Routes
+- `/api/agents/[agentId]/threads` - Creates new threads
+- `/api/agents/[agentId]/threads/[threadId]/messages` - Sends messages
+- All sensitive operations happen server-side
+- Zero risk of API key exposure
 
-The dashboard integrates with LangGraph APIs. Ensure your LangGraph agents are deployed and accessible via their API endpoints.
-
-### API Configuration
-
-Each chat panel requires:
-- **API Key**: Your LangGraph API authentication key
-- **Thread ID**: Unique identifier for the conversation thread
-- **Agent Name**: Display name for the agent
+### Client-Side Security
+- No API keys in browser or client bundle
+- Thread IDs managed automatically
+- Clean separation of concerns
 
 ## Project Structure
 
 ```
-├── app/                 # Next.js app router
-├── components/          # React components
-├── lib/                 # Utility functions and API clients
-└── types/              # TypeScript type definitions
+├── app/                           # Next.js app router
+│   ├── api/agents/[agentId]/      # Server-side API routes
+│   │   ├── threads/route.ts       # Create new threads
+│   │   └── threads/[threadId]/
+│   │       └── messages/route.ts  # Send messages
+│   ├── globals.css               # Global styles
+│   ├── layout.tsx                # Root layout
+│   └── page.tsx                  # Main dashboard page
+├── components/                    
+│   ├── ChatMessage.tsx           # Individual message 
+│   ├── ChatInput.tsx             # Message input 
+│   ├── ChatPanel.tsx             # Complete chat interface panel
+│   └── SimultaneousInput.tsx     # Input for both agents
+├── lib/                          # Utility functions
+│   ├── api.ts                    # Secure client API
+│   └── config.ts                 # Configuration helpers
+└── types/                        # TypeScript definitions
+    └── index.ts                  # Core types
 ```
 
 ## Built With
