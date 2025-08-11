@@ -28,7 +28,7 @@ export function SimultaneousInput({ onSendMessage, disabled = false, placeholder
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4">
+    <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4 z-[99999] fixed bottom-0 left-0 right-0">
       <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
         <div className="flex-1 relative">
           <textarea
